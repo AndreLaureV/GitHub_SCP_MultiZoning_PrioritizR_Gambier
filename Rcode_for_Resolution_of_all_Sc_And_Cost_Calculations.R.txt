@@ -1,0 +1,748 @@
+# SCP problem with ZONES, using manual targets (relative and absolute) 
+# PU has shapefile format and features are in supplementary colomns, for each zone
+## COST = Surface Area OR Fishery Catch OR Fishery and Ciguatera 
+
+# load packages
+library(prioritizr)
+library(gurobi)
+library(ggplot2)
+library(sf)
+
+# load data
+PU_sf <- read_sf("C:/Users/Vaitiare/Documents/Mission 2 MGR - Analyses/Sc PrioritizR 3/shp/PU_1_test7.shp")
+print(PU_sf)
+#check the features that guide the selection for the farms (farm suitability)
+plot(st_as_sf(PU_sf[,"CoefCon4"]), main = "Feature coef concessions")
+ggplot(PU_sf, aes(fill = CoefCon4)) +geom_sf()
+
+#Add the colomns LOCKED in/out: collecting zone and the 4 sanctuaries + lock0 as neutral
+PU_sf$LockColl <- as.logical(PU_sf$Collectage)
+print(PU_sf$LockColl)
+plot(st_as_sf(PU_sf[,"LockColl"]), main = "Locked out Collectage")
+
+PU_sf$LockSanct <- as.logical(PU_sf$Les4Sanc)
+print(PU_sf$LockSanct)
+plot(st_as_sf(PU_sf[,"LockSanct"]))
+
+PU_sf$Lock0 <- as.logical(FALSE)
+print(PU_sf$Lock0)
+plot(st_as_sf(PU_sf[,"Lock0"]))
+plot(st_as_sf(PU_sf[,"Neutre"]))
+
+### PROBLEM 1 Sc 1 Conservation et Perl Farming (without conidering fishery)
+# create variables with names
+zone_names <- c("Z1_Conservation", "Z2_Farms")
+feature_names <-  c("Z2_Fungia", "Z2_Stock", "CorailHa", "CoefCon4", "PUsurf")
+
+# create variables with column names,
+# these should be columns in the pu_data object which is the planning unit
+#   shapefile with all the data
+cost_columns_FishCigua <- c("Z2_Cost", "Z2_Cost")
+cost_columns_Surface <- c("PUsurf", "PUsurf")
+conservation_feature_columns <- c("Z2_Fungia", "Z2_Stock", "CorailHa", "CoefCon4", "PUsurf")
+farm_feature_columns <- c("Z2_Fungia", "Z2_Stock", "CorailHa", "CoefCon4", "PUsurf")
+
+# create ZONES object based on the column names
+z <- zones(
+  conservation_feature_columns, 
+  farm_feature_columns,
+  zone_names = zone_names,
+  feature_names = feature_names)
+
+#  Set TARGETS with tibbles (give the same nb of variables at each level)
+# (each of the inputs to tibble::tibble needs to have the same length)
+#(each target needs a zone, a feature, a sense, and a target value)
+targets_1 <- tibble::tibble(
+  feature = c("Z2_Fungia", "Z2_Stock", "CorailHa", "CoefCon4", "PUsurf", 
+              "Z2_Fungia", "Z2_Stock", "CorailHa", "CoefCon4", "PUsurf"), 
+  zone = c("Z1_Conservation","Z1_Conservation","Z1_Conservation","Z1_Conservation","Z1_Conservation", 
+           "Z2_Farms", "Z2_Farms", "Z2_Farms", "Z2_Farms", "Z2_Farms"),
+  sense = c(">=", ">=", ">=", ">=", ">=", 
+            ">=", ">=", ">=", ">=", "<="), 
+  type = c("relative", "relative","relative", "relative", "relative",
+           "relative", "relative", "relative", "relative", "absolute"),
+  target = c(0.3, 0.8, 0.1, 0, 0, 
+             0, 0, 0, 0.07, 1500))
+
+#add a constraint on compacness just for Z1 CONSERVATION
+#matrix for compactness
+zm <- diag(number_of_zones(z))
+zm[2, 2] <- 0
+print(zm)
+
+
+# create PROBLEM P1 OBJ Cons and Farms, COST = Surface
+p1 <- 
+  problem(PU_sf, z, cost= cost_columns_Surface) %>%
+  add_min_set_objective() %>%
+  add_manual_targets(targets_1) %>%
+  add_binary_decisions() %>%
+  add_locked_out_constraints(c("Lock0", "LockColl")) %>%
+  add_locked_in_constraints(c("LockSanct", "Lock0")) %>%
+  add_boundary_penalties(penalty = 0.01, zones = zm)
+print(p1)            # P1 has a blm = 0.01
+s1 <- solve(p1)
+
+sum(s1$solution_1_Z2_Farms)
+sum(s1$solution_1_Z1_Conservation)
+
+s1$solution <- category_vector(s1[, c("Les4Sanc", "solution_1_Z1_Conservation", "solution_1_Z2_Farms", "Collectage")])
+plot(st_as_sf(s1[,"solution"]), main ="Sc1ConsFarms;cst=surf;Lckin,out;blm=0.01;pu150")
+
+# calculate cost of the solution
+rCostSc1 <- eval_cost_summary(
+  p1, s1[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rCostSc1)
+
+#calculate total length of the solution
+rtls1 <- eval_boundary_summary(p1, s1[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rtls1)
+
+
+
+
+# modulate BLM for PROBLEM P1 OBJ Cons and Farms, COST = Surface
+p1blm0_001 <- 
+  problem(PU_sf, z, cost= cost_columns_Surface) %>%
+  add_min_set_objective() %>%
+  add_manual_targets(targets_1) %>%
+  add_binary_decisions() %>%
+  add_locked_out_constraints(c("Lock0", "LockColl")) %>%
+  add_locked_in_constraints(c("LockSanct", "Lock0")) %>%
+  add_boundary_penalties(penalty = 0.001, zones = zm)
+s1blm0_001 <- solve(p1blm0_001)
+
+sum(s1blm0_001$solution_1_Z2_Farms)
+sum(s1blm0_001$solution_1_Z1_Conservation)
+
+s1blm0_001$solution <- category_vector(s1blm0_001[, c("Les4Sanc", "solution_1_Z1_Conservation", "solution_1_Z2_Farms", "Collectage")])
+plot(st_as_sf(s1blm0_001[,"solution"]), main ="Sc1ConsFarms;cst=surf;Lckin,out;blm=0.001,0;pu149")
+
+# calculate cost of the solution
+rCostSc1blm0_001 <- eval_cost_summary(
+  p1blm0_001, s1blm0_001[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rCostSc1blm0_001)
+
+#calculate total length of the solution
+rtls1blm0_001 <- eval_boundary_summary(p1blm0_001, s1blm0_001[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rtls1blm0_001)
+
+
+# modulate BLM for PROBLEM P1 OBJ Cons and Farms, COST = Surface
+p1blm1 <- 
+  problem(PU_sf, z, cost= cost_columns_Surface) %>%
+  add_min_set_objective() %>%
+  add_manual_targets(targets_1) %>%
+  add_binary_decisions() %>%
+  add_locked_out_constraints(c("Lock0", "LockColl")) %>%
+  add_locked_in_constraints(c("LockSanct", "Lock0")) %>%
+  add_boundary_penalties(penalty = 1, zones = zm)
+s1blm1 <- solve(p1blm1)
+
+sum(s1blm1$solution_1_Z2_Farms)
+sum(s1blm1$solution_1_Z1_Conservation)
+
+s1blm1$solution <- category_vector(s1blm1[, c("Les4Sanc", "solution_1_Z1_Conservation", "solution_1_Z2_Farms", "Collectage")])
+plot(st_as_sf(s1blm1[,"solution"]), main ="Sc1ConsFarms;cst=surf;Lckin,out;blm=1;pu148")
+
+# calculate cost of the solution
+rCostSc1blm1 <- eval_cost_summary(
+  p1blm1, s1blm1[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rCostSc1blm1)
+
+#calculate total length of the solution
+rtls1blm1 <- eval_boundary_summary(p1blm1, s1blm1[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rtls1blm1)
+
+
+# modulate BLM for PROBLEM P1 OBJ Cons and Farms, COST = Surface ####### WINNER ##########
+p1blm0_1 <- 
+  problem(PU_sf, z, cost= cost_columns_Surface) %>%
+  add_min_set_objective() %>%
+  add_manual_targets(targets_1) %>%
+  add_binary_decisions() %>%
+  add_locked_out_constraints(c("Lock0", "LockColl")) %>%
+  add_locked_in_constraints(c("LockSanct", "Lock0")) %>%
+  add_boundary_penalties(penalty = 0.1, zones = zm)
+s1blm0_1 <- solve(p1blm0_1)
+
+sum(s1blm0_1$solution_1_Z2_Farms)
+sum(s1blm0_1$solution_1_Z1_Conservation)
+
+s1blm0_1$solution <- category_vector(s1blm0_1[, c("Les4Sanc", "solution_1_Z1_Conservation", "solution_1_Z2_Farms", "Collectage")])
+plot(st_as_sf(s1blm0_1[,"solution"]), main ="Sc1ConsFarms;cst=surf;Lckin,out;blm=1,0;pu140")
+
+# calculate cost of the solution
+rCostSc1blm0_1 <- eval_cost_summary(
+  p1blm0_1, s1blm0_1[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rCostSc1blm0_1)
+
+#calculate total length of the solution
+rtls1blm0_1 <- eval_boundary_summary(p1blm0_1, s1blm0_1[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rtls1blm0_1)
+
+##### => this Sc with this BLM level appears as the Best compromise for Sc1, with BLM = 0,1 #####
+
+# Export shape of solutions
+st_write(s1blm0_1, "C:/Users/Vaitiare/Documents/Mission 2 MGR - Analyses/Sc PrioritizR 4/shp/s1blm0_1.shp")
+
+# calculate target coverage by the solution
+rTgtSc1blm0_1 <- eval_target_coverage_summary(
+  p1blm0_1, s1blm0_1[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rTgtSc1blm0_1, width = Inf)
+rTgtSc1blm0_1$zone <- unlist(rTgtSc1blm0_1$zone)
+write.csv2(rTgtSc1blm0_1, row.names = FALSE, file="C:/Users/Vaitiare/Documents/Mission 2 MGR - Analyses/Sc PrioritizR 3/solutions 2 Zones 3 Sc v8/Measures and costs/ResultTargetSc1blm0_1.csv")
+
+# calculate cost of the solution
+rCostSc1blm0_1 <- eval_cost_summary(
+  p1blm0_1, s1blm0_1[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rCostSc1blm0_1)
+write.csv2(rCostSc1blm0_1, row.names = FALSE, file="C:/Users/Vaitiare/Documents/Mission 2 MGR - Analyses/Sc PrioritizR 3/solutions 2 Zones 3 Sc v8/Measures and costs/ResultCostSc1blm0_1.csv")
+
+### calculations on the RESULTS of Sc 1 blm 0_1
+# given this order: s1blm0_1[, c("Les4Sanc", "solution_1_Z1_Conservation", "solution_1_Z2_Farms", "Collectage")]
+#surface areas, in this order: 1 (Les 4 Sanc), 2 (Z1_Conservation), 3 (Z2_Farms), 4 (Collectage) and 0 (remaining open for Fishery)
+# check
+sum((s1blm0_1$solution==1)*s1blm0_1$Z2_Cost)
+
+sum((c(s1blm0_1$solution==2,s1blm0_1$solution==1))*s1blm0_1$PUsurf)
+sum((s1blm0_1$solution==3)*s1blm0_1$PUsurf)
+sum((s1blm0_1$solution==0)*s1blm0_1$PUsurf)
+sum((s1blm0_1$solution==4)*s1blm0_1$PUsurf)
+
+# cost measured in FishCigua, in the order: 2 (Z1_Conservation), 3 (Z2_Farms) et 0 (remaining open for Fishery)
+sum((c(s1blm0_1$solution==2,s1blm0_1$solution==1))*s1blm0_1$Z2_Cost)
+sum((s1blm0_1$solution==3)*s1blm0_1$Z2_Cost)
+sum((s1blm0_1$solution==0)*s1blm0_1$Z2_Cost)
+sum((s1blm0_1$solution==4)*s1blm0_1$Z2_Cost)
+
+# cost measured in FishOnly,  in the order: 2 (Z1_Conservation), 3 (Z2_Farms) et 0 (remaining open for Fishery)
+sum((c(s1blm0_1$solution==2,s1blm0_1$solution==1))*s1blm0_1$CstFishOnl)
+sum((s1blm0_1$solution==3)*s1blm0_1$CstFishOnl)
+sum((s1blm0_1$solution==0)*s1blm0_1$CstFishOnl)
+sum((s1blm0_1$solution==4)*s1blm0_1$CstFishOnl)
+
+# cost measured in ConcHist, in the order 2 (Z1_Conservation), 3 (Z2_Farms) et 0 (remaining open for Fishery)
+sum((c(s1blm0_1$solution==2,s1blm0_1$solution==1))*s1blm0_1$ConcHistHa)
+sum((s1blm0_1$solution==3)*s1blm0_1$ConcHistHa)
+sum((s1blm0_1$solution==0)*s1blm0_1$ConcHistHa)
+sum((s1blm0_1$solution==4)*s1blm0_1$ConcHistHa)
+
+# cost measured in Fungia, in the order 2 (Z1_Conservation), 3 (Z2_Farms) et 0 (remaining open for Fishery)
+sum((c(s1blm0_1$solution==2,s1blm0_1$solution==1))*s1blm0_1$Z2_Fungia)
+sum((s1blm0_1$solution==3)*s1blm0_1$Z2_Fungia)
+sum((s1blm0_1$solution==0)*s1blm0_1$Z2_Fungia)
+sum((s1blm0_1$solution==4)*s1blm0_1$Z2_Fungia)
+
+# cost measured in Stock, in the order 2 (Z1_Conservation), 3 (Z2_Farms) et 0 (remaining open for Fishery)
+sum((c(s1blm0_1$solution==2,s1blm0_1$solution==1))*s1blm0_1$Z2_Stock)
+sum((s1blm0_1$solution==3)*s1blm0_1$Z2_Stock)
+sum((s1blm0_1$solution==0)*s1blm0_1$Z2_Stock)
+sum((s1blm0_1$solution==4)*s1blm0_1$Z2_Stock)
+
+# cost measured in Stock, in the order 2 (Z1_Conservation), 3 (Z2_Farms) et 0 (remaining open for Fishery)
+sum((c(s1blm0_1$solution==2,s1blm0_1$solution==1))*s1blm0_1$CorailHa)
+sum((s1blm0_1$solution==3)*s1blm0_1$CorailHa)
+sum((s1blm0_1$solution==0)*s1blm0_1$CorailHa)
+sum((s1blm0_1$solution==4)*s1blm0_1$CorailHa)
+
+
+## Finish problem 1 
+
+
+
+# Double check of the totals :
+sum(PU_sf$PUsurf)
+sum(PU_sf$Z2_Cost)
+sum(PU_sf$CstFishOnl)
+sum(PU_sf$ConcHistHa)
+sum(PU_sf$Z2_Fungia)
+sum(PU_sf$Z2_Stock)
+sum(PU_sf$CorailHa)
+
+
+
+
+
+
+####  Create Problem 2 OBJ Cons // COST Fish_Cigua (1 Zone)
+
+feature_names2 <-  c("Z2_Fungia", "CorailHa")
+targets2 <- c(0.3, 0.1)
+
+p2 <- problem(PU_sf, feature_names2, cost_column= "Z2_Cost") %>%
+  add_min_set_objective() %>%
+  add_relative_targets(targets2) %>%
+  add_boundary_penalties(0.01, 0.5)
+
+s2 <- solve(p2)
+plot(st_as_sf(s2[,"solution_1"]))
+sum(s2$solution_1)    ## = 232 PU
+
+# calculate cost of the solution
+rCostSc2 <- eval_cost_summary(p2, s2[, "solution_1"])
+print(rCostSc2)
+
+#calculate total length of the solution
+rtls2 <- eval_boundary_summary(p2, s2[, "solution_1"])
+print(rtls2)
+
+### => Afterwards, this one appeared to be the best BLM = 0.01 <= ###
+
+### change BLM à 0,001
+p2blm0_001 <- problem(PU_sf, feature_names2, cost_column= "Z2_Cost") %>%
+  add_min_set_objective() %>%
+  add_relative_targets(targets2) %>%
+  add_boundary_penalties(0.001, 0.5)
+
+s2blm0_001 <- solve(p2blm0_001)
+plot(st_as_sf(s2blm0_001[,"solution_1"]))
+sum(s2blm0_001$solution_1)    ## = 167 PU
+
+# calculate cost of the solution
+rCostSc2blm0_001 <- eval_cost_summary(p2blm0_001, s2blm0_001[, "solution_1"])
+print(rCostSc2blm0_001)
+
+#calculate total length of the solution
+rtls2blm0_001 <- eval_boundary_summary(p2blm0_001, s2blm0_001[, "solution_1"])
+print(rtls2blm0_001)
+
+
+### change BLM à 0,1    ### 
+p2blm0_1 <- problem(PU_sf, feature_names2, cost_column= "Z2_Cost") %>%
+  add_min_set_objective() %>%
+  add_relative_targets(targets2) %>%
+  add_boundary_penalties(0.1, 0.5)
+
+s2blm0_1 <- solve(p2blm0_1)
+plot(st_as_sf(s2blm0_1[,"solution_1"]))
+sum(s2blm0_1$solution_1)    ## = 232 PU
+
+# calculate cost of the solution
+rCostSc2blm0_1 <- eval_cost_summary(p2blm0_1, s2blm0_1[, "solution_1"])
+print(rCostSc2blm0_1)
+
+#calculate total length of the solution
+rtls2blm0_1 <- eval_boundary_summary(p2blm0_1, s2blm0_1[, "solution_1"])
+print(rtls2blm0_1)
+
+
+
+### calculations on the REASULTS of Sc 2 (blm= 0.01)
+#surface area of the solution = 1 in conservation ; and = 0 remaining open for Fishery
+sum((s2$solution_1==1)*s2$PUsurf)
+sum((s2$solution_1==0)*s2$PUsurf)
+sum(s2$PUsurf)
+sum((s2$solution_1==1)*s2$PUsurf) + sum((s2$solution_1==0)*s2$PUsurf)
+
+# cost in FishCigua, of the solution = 1 in conservation and = 0 remaining open for Fishery
+sum((s2$solution_1==1)*s2$Z2_Cost)
+sum((s2$solution_1==0)*s2$Z2_Cost)
+sum(s2$Z2_Cost)
+
+# cost in FishOnly,  of the solution = 1 in conservation and = 0 remaining open for Fishery
+sum((s2$solution_1==1)*s2$CstFishOnl)
+sum((s2$solution_1==0)*s2$CstFishOnl)
+
+
+# cost in ConcHist, of the solution = 1 in conservation and = 0 remaining open for Fishery
+sum((s2$solution_1==1)*s2$ConcHistHa)
+sum((s2$solution_1==0)*s2$ConcHistHa)
+
+# cost in Fungia,of the solution = 1 in conservation and = 0 remaining open for Fishery
+sum((s2$solution_1==1)*s2$Z2_Fungia)
+sum((s2$solution_1==0)*s2$Z2_Fungia)
+
+# cost in Stock, of the solution = 1 in conservation and = 0 remaining open for Fishery
+sum((s2$solution_1==1)*s2$Z2_Stock)
+sum((s2$solution_1==0)*s2$Z2_Stock)
+
+# cost in Corail, of the solution = 1 in conservation and = 0 remaining open for Fishery
+sum((s2$solution_1==1)*s2$CorailHa)
+sum((s2$solution_1==0)*s2$CorailHa)
+
+
+
+
+
+#### Create Problem 2bis OBJ Cons // COST Fish_Only (1 Zone)
+
+p2bis <- problem(PU_sf, feature_names2, cost_column= "CstFishOnl") %>%
+  add_min_set_objective() %>%
+  add_relative_targets(targets2_2) %>%
+  add_boundary_penalties(0.01, 0.5)
+
+s2bis <- solve(p2bis)
+sum(s2bis$solution_1)  ## Solution = 237 PU
+plot(st_as_sf(s2bis[,"solution_1"], main ="Sc2bis"))  #Sc2bis Cons, BLM=0.01;0.5 Cost=FishOnly
+
+# calculate cost of the solution
+rCostSc2bis <- eval_cost_summary(p2bis, s2bis[, "solution_1"])
+print(rCostSc2bis)
+
+#calculate total length of the solution
+rtlSc2bis <- eval_boundary_summary(p2bis, s2bis[, "solution_1"])
+print(rtlSc2bis)
+
+
+## Change BLM to 0.001
+
+p2bisblm0_001 <- problem(PU_sf, feature_names2, cost_column= "CstFishOnl") %>%
+  add_min_set_objective() %>%
+  add_relative_targets(targets2_2) %>%
+  add_boundary_penalties(0.001, 0.5)
+
+s2bisblm0_001 <- solve(p2bisblm0_001)
+sum(s2bisblm0_001$solution_1)  ## Solution = 237 PU
+plot(st_as_sf(s2bisblm0_001[,"solution_1"], main ="Sc2bis"))  #Sc2bis Cons, BLM=0.001;0.5 Cost=FishOnly
+
+# calculate cost of the solution
+rCostSc2bisblm0_001 <- eval_cost_summary(p2bisblm0_001, s2bisblm0_001[, "solution_1"])
+print(rCostSc2bisblm0_001)
+
+#calculate total length of the solution
+rtlSc2bisblm0_001 <- eval_boundary_summary(p2bisblm0_001, s2bisblm0_001[, "solution_1"])
+print(rtlSc2bisblm0_001)
+
+
+## Change BLM to 0.1
+
+p2bisblm0_1 <- problem(PU_sf, feature_names2, cost_column= "CstFishOnl") %>%
+  add_min_set_objective() %>%
+  add_relative_targets(targets2_2) %>%
+  add_boundary_penalties(0.1, 0.5)
+
+s2bisblm0_1 <- solve(p2bisblm0_1)
+sum(s2bisblm0_1$solution_1)  ## Solution = 237 PU
+plot(st_as_sf(s2bisblm0_1[,"solution_1"], main ="Sc2bis"))  #Sc2bis Cons, BLM=0.1;0.5 Cost=FishOnly
+
+
+
+
+### calculations on the REASULTS Sc 2bis   ## 
+#surface area of the solution = 1 in conservation and = 0 remaining open for Fishery
+sum((s2_2bis$solution_1==1)*s2_2bis$PUsurf)
+sum((s2_2bis$solution_1==0)*s2_2bis$PUsurf)
+sum(s2_2bis$PUsurf)
+
+# cost in FishCigua, of the solution = 1 in conservation and  = 0 remaining open for Fishery
+sum((s2_2bis$solution_1==1)*s2_2bis$Z2_Cost)
+sum((s2_2bis$solution_1==0)*s2_2bis$Z2_Cost)
+
+#cost in FishOnly,  of the solution = 1 in conservation and = 0 remaining open for Fishery
+sum((s2_2bis$solution_1==1)*s2_2bis$CstFishOnl)
+sum((s2_2bis$solution_1==0)*s2_2bis$CstFishOnl)
+
+# cost in ConcHist, of the solution = 1 in conservation and = 0 remaining open for Fishery
+sum((s2_2bis$solution_1==1)*s2_2bis$ConcHistHa)
+sum((s2_2bis$solution_1==0)*s2_2bis$ConcHistHa)
+
+#cost in Fungia, of the solution = 1 in conservation and = 0 remaining open for Fishery
+sum((s2_2bis$solution_1==1)*s2_2bis$Z2_Fungia)
+sum((s2_2bis$solution_1==0)*s2_2bis$Z2_Fungia)
+
+# cost in Stock, of the solution = 1 in conservation and = 0 remaining open for Fishery
+sum((s2_2bis$solution_1==1)*s2_2bis$Z2_Stock)
+sum((s2_2bis$solution_1==0)*s2_2bis$Z2_Stock)
+
+# cost in Corail, of the solution = 1 in conservation and = 0 remaining open for Fishery
+sum((s2_2bis$solution_1==1)*s2_2bis$CorailHa)
+sum((s2_2bis$solution_1==0)*s2_2bis$CorailHa)
+
+
+## Finishing Problem 2
+
+
+
+
+
+
+
+
+
+### PROBLEM 3 Sc 3 Conservation and Farms and Fish Only as COST
+# use same as for Sc 1 variables, zones, targets
+cost_columns_FishOnly <- c("CstFishOnl", "CstFishOnl")
+
+
+# create PROBLEM P3 OBJ Cons and Farms, COST = Fish Only
+p3 <- 
+  problem(PU_sf, z, cost= cost_columns_FishOnly) %>%
+  add_min_set_objective() %>%
+  add_manual_targets(targets_1) %>%
+  add_binary_decisions() %>%
+  add_locked_out_constraints(c("Lock0", "LockColl")) %>%
+  add_locked_in_constraints(c("LockSanct", "Lock0")) %>%
+  add_boundary_penalties(penalty = 0.0001, zones = zm)
+s3 <- solve(p3)
+
+sum(s3$solution_1_Z2_Farms)
+sum(s3$solution_1_Z1_Conservation)
+
+s3$solution <- category_vector(s3[, c("Les4Sanc", "solution_1_Z1_Conservation", "solution_1_Z2_Farms", "Collectage")])
+plot(st_as_sf(s3[,"solution"]), main ="Sc3ConsFarms;cst=FishO;Lckin,out;blm=0.0001,0;pu150")
+
+# calculate cost of the solution
+rCostSc3 <- eval_cost_summary(p3, s3[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rCostSc3)
+
+#calculate total length of the solution
+rtlSc3 <- eval_boundary_summary(p3, s3[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rtlSc3)
+
+
+
+# create PROBLEM P3 OBJ Cons and Farms, COST = Fish Only with NO BLM
+p3noBLM <- 
+  problem(PU_sf, z, cost= cost_columns_FishOnly) %>%
+  add_min_set_objective() %>%
+  add_manual_targets(targets_1) %>%
+  add_binary_decisions() %>%
+  add_locked_out_constraints(c("Lock0", "LockColl")) %>%
+  add_locked_in_constraints(c("LockSanct", "Lock0"))
+  
+s3noBLM <- solve(p3noBLM)
+
+sum(s3noBLM$solution_1_Z2_Farms)
+sum(s3noBLM$solution_1_Z1_Conservation)
+
+s3noBLM$solution <- category_vector(s3noBLM[, c("Les4Sanc", "solution_1_Z1_Conservation", "solution_1_Z2_Farms", "Collectage")])
+plot(st_as_sf(s3noBLM[,"solution"]), main ="Sc3ConsFarms;cst=FishO;Lckin,out;No Blm;pu150")
+
+# calculate cost of the solution
+rCostSc3noBLM <- eval_cost_summary(p3noBLM, s3noBLM[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rCostSc3noBLM)
+
+#calculate total length of the solution
+rtlSc3noBLM <- eval_boundary_summary(p3noBLM, s3noBLM[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rtlSc3noBLM)
+
+# calculate target coverage by the solution
+rTgtSc3 <- eval_target_coverage_summary(
+  p3, s3[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rTgtSc3, width = Inf)
+rTgtSc3$zone <- unlist(rTgtSc3$zone)
+write.csv2(rTgtSc3, row.names = FALSE, file="C:/Users/Vaitiare/Documents/Mission 2 MGR - Analyses/Sc PrioritizR 3/solutions 2 Zones 3 Sc v8/ResultTargetSc3.csv")
+
+# calculate cost of the solution
+rCostSc3 <- eval_cost_summary(
+  p3, s3[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rCostSc3)
+write.csv2(rCostSc3, row.names = FALSE, file="C:/Users/Vaitiare/Documents/Mission 2 MGR - Analyses/Sc PrioritizR 3/solutions 2 Zones 3 Sc v8/ResultCostSc3.csv")
+
+
+
+# create PROBLEM P3 OBJ Cons and Farms, COST = Fish Only with BLM = 0.001
+
+p3BLM0_001 <- 
+  problem(PU_sf, z, cost= cost_columns_FishOnly) %>%
+  add_min_set_objective() %>%
+  add_manual_targets(targets_1) %>%
+  add_binary_decisions() %>%
+  add_locked_out_constraints(c("Lock0", "LockColl")) %>%
+  add_locked_in_constraints(c("LockSanct", "Lock0")) %>%
+  add_boundary_penalties(penalty = 0.001, zones = zm)
+
+s3BLM0_001 <- solve(p3BLM0_001)
+
+sum(s3noBLM$solution_1_Z2_Farms)
+sum(s3noBLM$solution_1_Z1_Conservation)
+
+s3BLM0_001$solution <- category_vector(s3BLM0_001[, c("Les4Sanc", "solution_1_Z1_Conservation", "solution_1_Z2_Farms", "Collectage")])
+plot(st_as_sf(s3BLM0_001[,"solution"]), main ="Sc3ConsFarms;cst=FishO;Lckin,out;Blm0.001;pu150")
+
+# calculate cost of the solution
+rCostSc3BLM0_001 <- eval_cost_summary(p3BLM0_001, s3BLM0_001[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rCostSc3BLM0_001)
+
+#calculate total length of the solution
+rtlSc3BLM0_001 <- eval_boundary_summary(p3BLM0_001, s3BLM0_001[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rtlSc3BLM0_001)
+
+
+## Finish Problem 3 taking into account Fishery Only (Fishery catch and no Ciguatera)
+
+
+
+
+
+# create PROBLEM P3bis OBJ Cons and Farms, COST = Fish Cigua (BIS)
+p3bis <- 
+  problem(PU_sf, z, cost= cost_columns_FishCigua) %>%
+  add_min_set_objective() %>%
+  add_manual_targets(targets_1) %>%
+  add_binary_decisions() %>%
+  add_locked_out_constraints(c("Lock0", "LockColl")) %>%
+  add_locked_in_constraints(c("LockSanct", "Lock0")) %>%
+  add_boundary_penalties(penalty = 0.0001, zones = zm)
+s3bis <- solve(p3bis)
+
+sum(s3bis$solution_1_Z2_Farms)
+sum(s3bis$solution_1_Z1_Conservation)
+
+s3bis$solution <- category_vector(s3bis[, c("Les4Sanc", "solution_1_Z1_Conservation", "solution_1_Z2_Farms", "Collectage")])
+plot(st_as_sf(s3bis[,"solution"]), main ="Sc3ConsFarms;cst=FishCigua;Lckin,out;blm=0.0001,0;pu150")
+
+# calculate cost of the solution
+rCostSc3bis <- eval_cost_summary(p3bis, s3bis[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rCostSc3bis)
+
+#calculate total length of the solution
+rtlSc3bis <- eval_boundary_summary(p3bis, s3bis[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rtlSc3bis)
+
+
+# Modify PROBLEM P3bis OBJ Cons and Farms, COST = Fish Cigua (BIS) with  BLM = 0.001
+p3bisBlm0_001 <- 
+  problem(PU_sf, z, cost= cost_columns_FishCigua) %>%
+  add_min_set_objective() %>%
+  add_manual_targets(targets_1) %>%
+  add_binary_decisions() %>%
+  add_locked_out_constraints(c("Lock0", "LockColl")) %>%
+  add_locked_in_constraints(c("LockSanct", "Lock0")) %>%
+  add_boundary_penalties(penalty = 0.001, zones = zm)
+s3bisBlm0_001 <- solve(p3bisBlm0_001)
+
+sum(s3bisBlm0_001$solution_1_Z2_Farms)
+sum(s3bisBlm0_001$solution_1_Z1_Conservation)
+s3bisBlm0_001$solution <- category_vector(s3bisBlm0_001[, c("Les4Sanc", "solution_1_Z1_Conservation", "solution_1_Z2_Farms", "Collectage")])
+plot(st_as_sf(s3bisBlm0_001[,"solution"]), main ="Sc3bisConsFarms;cst=FishCigua;Lckin,out;blm=0.001;pu150")
+
+# calculate cost of the solution
+rCostSc3bisBlm0_001 <- eval_cost_summary(p3bisBlm0_001, s3bisBlm0_001[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rCostSc3bisBlm0_001)
+
+#calculate total length of the solution
+rtlSc3bisBlm0_001 <- eval_boundary_summary(p3bisBlm0_001, s3bisBlm0_001[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rtlSc3bisBlm0_001)
+
+
+
+# Modify PROBLEM P3bis OBJ Cons and Farms, COST = Fish Cigua (BIS) with  BLM = 0.01
+p3bisBlm0_01 <- 
+  problem(PU_sf, z, cost= cost_columns_FishCigua) %>%
+  add_min_set_objective() %>%
+  add_manual_targets(targets_1) %>%
+  add_binary_decisions() %>%
+  add_locked_out_constraints(c("Lock0", "LockColl")) %>%
+  add_locked_in_constraints(c("LockSanct", "Lock0")) %>%
+  add_boundary_penalties(penalty = 0.01, zones = zm)
+s3bisBlm0_01 <- solve(p3bisBlm0_01)
+
+sum(s3bisBlm0_01$solution_1_Z2_Farms)
+sum(s3bisBlm0_01$solution_1_Z1_Conservation)
+s3bisBlm0_01$solution <- category_vector(s3bisBlm0_01[, c("Les4Sanc", "solution_1_Z1_Conservation", "solution_1_Z2_Farms", "Collectage")])
+plot(st_as_sf(s3bisBlm0_01[,"solution"]), main ="Sc3bisConsFarms;cst=FishCigua;Lckin,out;blm=0.01;pu150")
+
+# calculate cost of the solution
+rCostSc3bisBlm0_01 <- eval_cost_summary(p3bisBlm0_01, s3bisBlm0_01[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rCostSc3bisBlm0_01)
+
+#calculate total length of the solution
+rtlSc3bisBlm0_01 <- eval_boundary_summary(p3bisBlm0_01, s3bisBlm0_01[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rtlSc3bisBlm0_01)
+
+
+# Modify PROBLEM P3bis OBJ Cons and Farms, COST = Fish Cigua (BIS) with  BLM = 0.1
+p3bisBlm0_1 <- 
+  problem(PU_sf, z, cost= cost_columns_FishCigua) %>%
+  add_min_set_objective() %>%
+  add_manual_targets(targets_1) %>%
+  add_binary_decisions() %>%
+  add_locked_out_constraints(c("Lock0", "LockColl")) %>%
+  add_locked_in_constraints(c("LockSanct", "Lock0")) %>%
+  add_boundary_penalties(penalty = 0.1, zones = zm)
+s3bisBlm0_1 <- solve(p3bisBlm0_1)
+
+sum(s3bisBlm0_1$solution_1_Z2_Farms)
+sum(s3bisBlm0_1$solution_1_Z1_Conservation)
+s3bisBlm0_1$solution <- category_vector(s3bisBlm0_1[, c("Les4Sanc", "solution_1_Z1_Conservation", "solution_1_Z2_Farms", "Collectage")])
+plot(st_as_sf(s3bisBlm0_1[,"solution"]), main ="Sc3bisConsFarms;cst=FishCigua;Lckin,out;blm=0.1;pu150")
+
+# calculate cost of the solution
+rCostSc3bisBlm0_1 <- eval_cost_summary(p3bisBlm0_1, s3bisBlm0_1[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rCostSc3bisBlm0_1)
+
+#calculate total length of the solution
+rtlSc3bisBlm0_1 <- eval_boundary_summary(p3bisBlm0_1, s3bisBlm0_1[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rtlSc3bisBlm0_1)
+
+# Modify PROBLEM P3bis OBJ Cons and Farms, COST = Fish Cigua (BIS) with  BLM = 0
+p3bisBlm0 <- 
+  problem(PU_sf, z, cost= cost_columns_FishCigua) %>%
+  add_min_set_objective() %>%
+  add_manual_targets(targets_1) %>%
+  add_binary_decisions() %>%
+  add_locked_out_constraints(c("Lock0", "LockColl")) %>%
+  add_locked_in_constraints(c("LockSanct", "Lock0"))
+s3bisBlm0 <- solve(p3bisBlm0)
+
+sum(s3bisBlm0$solution_1_Z2_Farms)
+sum(s3bisBlm0$solution_1_Z1_Conservation)
+s3bisBlm0$solution <- category_vector(s3bisBlm0[, c("Les4Sanc", "solution_1_Z1_Conservation", "solution_1_Z2_Farms", "Collectage")])
+plot(st_as_sf(s3bisBlm0[,"solution"]), main ="Sc3bisConsFarms;cst=FishCigua;Lckin,out;blm=0;pu150")
+
+# calculate cost of the solution
+rCostSc3bisBlm0 <- eval_cost_summary(p3bisBlm0, s3bisBlm0[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rCostSc3bisBlm0)
+
+#calculate total length of the solution
+rtlSc3bisBlm0 <- eval_boundary_summary(p3bisBlm0, s3bisBlm0[, c("solution_1_Z1_Conservation", "solution_1_Z2_Farms")])
+print(rtlSc3bisBlm0)
+
+
+
+
+
+
+
+
+### calculations on the RESULTS from Sc 3 bis blm 0_001 (meaning 0.001)
+# given the order: s3bisBlm0_001[, c("Les4Sanc", "solution_1_Z1_Conservation", "solution_1_Z2_Farms", "Collectage")]
+#surface area in the order 2 (Z1_Conservation), 3 (Z2_Farms) and 0 (remaining open for Fishery)
+##check
+sum((s3bisBlm0_001$solution==0)*s3bisBlm0_001$Z2_Cost)
+
+sum((c(s3bisBlm0_001$solution==2,s3bisBlm0_001$solution==1))*s3bisBlm0_001$PUsurf)
+sum((s3bisBlm0_001$solution==3)*s3bisBlm0_001$PUsurf)
+sum((s3bisBlm0_001$solution==0)*s3bisBlm0_001$PUsurf)
+sum((s3bisBlm0_001$solution==4)*s3bisBlm0_001$PUsurf)
+
+# cost in FishCigua, in the order 2 (Z1_Conservation), 3 (Z2_Farms) and 0 (remaining open for Fishery)
+sum((c(s3bisBlm0_001$solution==2,s3bisBlm0_001$solution==1))*s3bisBlm0_001$Z2_Cost)
+sum((s3bisBlm0_001$solution==3)*s3bisBlm0_001$Z2_Cost)
+sum((s3bisBlm0_001$solution==0)*s3bisBlm0_001$Z2_Cost)
+sum((s3bisBlm0_001$solution==4)*s3bisBlm0_001$Z2_Cost)
+
+# cost in FishOnly,  in the order 2 (Z1_Conservation), 3 (Z2_Farms) and 0 (remaining open for Fishery)
+sum((c(s3bisBlm0_001$solution==2,s3bisBlm0_001$solution==1))*s3bisBlm0_001$CstFishOnl)
+sum((s3bisBlm0_001$solution==3)*s3bisBlm0_001$CstFishOnl)
+sum((s3bisBlm0_001$solution==0)*s3bisBlm0_001$CstFishOnl)
+sum((s3bisBlm0_001$solution==4)*s3bisBlm0_001$CstFishOnl)
+
+# cost in ConcHist, in the order 2 (Z1_Conservation), 3 (Z2_Farms) and 0 (remaining open for Fishery)
+sum((c(s3bisBlm0_001$solution==2,s3bisBlm0_001$solution==1))*s3bisBlm0_001$ConcHistHa)
+sum((s3bisBlm0_001$solution==3)*s3bisBlm0_001$ConcHistHa)
+sum((s3bisBlm0_001$solution==0)*s3bisBlm0_001$ConcHistHa)
+sum((s3bisBlm0_001$solution==4)*s3bisBlm0_001$ConcHistHa)
+
+# cost in Fungia, in the order 2 (Z1_Conservation), 3 (Z2_Farms) and 0 (remaining open for Fishery)
+sum((c(s3bisBlm0_001$solution==2,s3bisBlm0_001$solution==1))*s3bisBlm0_001$Z2_Fungia)
+sum((s3bisBlm0_001$solution==3)*s3bisBlm0_001$Z2_Fungia)
+sum((s3bisBlm0_001$solution==0)*s3bisBlm0_001$Z2_Fungia)
+sum((s3bisBlm0_001$solution==4)*s3bisBlm0_001$Z2_Fungia)
+
+# cost in Stock, in the order 2 (Z1_Conservation), 3 (Z2_Farms) and 0 (remaining open for Fishery)
+sum((c(s3bisBlm0_001$solution==2,s3bisBlm0_001$solution==1))*s3bisBlm0_001$Z2_Stock)
+sum((s3bisBlm0_001$solution==3)*s3bisBlm0_001$Z2_Stock)
+sum((s3bisBlm0_001$solution==0)*s3bisBlm0_001$Z2_Stock)
+sum((s3bisBlm0_001$solution==4)*s3bisBlm0_001$Z2_Stock)
+
+# cost in Corail, in the order 2 (Z1_Conservation), 3 (Z2_Farms) and 0 (remaining open for Fishery)
+sum((c(s3bisBlm0_001$solution==2,s3bisBlm0_001$solution==1))*s3bisBlm0_001$CorailHa)
+sum((s3bisBlm0_001$solution==3)*s3bisBlm0_001$CorailHa)
+sum((s3bisBlm0_001$solution==0)*s3bisBlm0_001$CorailHa)
+sum((s3bisBlm0_001$solution==4)*s3bisBlm0_001$CorailHa)
+
+
+## finish Problem 3 bis

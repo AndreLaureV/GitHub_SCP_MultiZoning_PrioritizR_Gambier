@@ -1,0 +1,327 @@
+##mise en page des plots de sensitivity analysis
+
+# load packages
+library(prioritizr)
+library(gurobi)
+library(ggplot2)
+library(sf)
+
+library(viridis)
+library(scales)
+show_col(viridis_pal()(10)) 
+library(ggplot2)
+library(ggpubr)
+
+
+#Require Scenarios 1, with Boundary penalty (Bp) = 1; 0.1; 0.01 ########################################
+#Sc1 with Bp = 0.01:
+plot(st_as_sf(s1[,"solution"]), main ="Sc1ConsFarms;cst=surf;Lckin,out;blm=0.01;pu150")
+#Presentation:
+MapSc1BLM0_01 <- ggplot(s1, aes(fill = as.factor(solution), col=as.factor(solution))) +
+  theme_void() +
+  rremove("xy.text") +
+  ggtitle("Sc 1 BLM 0,01") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(name="Zones",
+                    breaks=c("0", "1", "2", "3", "4"),
+                    labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                    values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF")) +
+  scale_color_manual(name="Zones",
+                     breaks=c("0", "1", "2", "3", "4"),
+                     labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                     values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF"))+
+  theme(legend.position="bottom") +
+  geom_sf()
+MapSc1BLM0_01
+
+
+#Sc1 with Bp = 0,1:
+s1blm0_1
+#Presentation:
+MapSc1BLM0_1 <- ggplot(s1blm0_1, aes(fill = as.factor(solution), col=as.factor(solution))) +
+  theme_void() +
+  rremove("xy.text") +
+  ggtitle("Sc 1 BLM 0,1") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(name="Zones",
+                    breaks=c("0", "1", "2", "3", "4"),
+                    labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                    values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF")) +
+  scale_color_manual(name="Zones",
+                     breaks=c("0", "1", "2", "3", "4"),
+                     labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                     values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF"))+
+  theme(legend.position="bottom") +
+  geom_sf()
+MapSc1BLM0_1
+
+
+#Sc1 with Bp = 1:
+s1blm1
+#Presentation:
+MapSc1BLM1 <- ggplot(s1blm1, aes(fill = as.factor(solution), col=as.factor(solution))) +
+  theme_void() +
+  rremove("xy.text") +
+  ggtitle("Sc 1 BLM 1") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(name="Zones",
+                    breaks=c("0", "1", "2", "3", "4"),
+                    labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                    values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF")) +
+  scale_color_manual(name="Zones",
+                     breaks=c("0", "1", "2", "3", "4"),
+                     labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                     values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF"))+
+  theme(legend.position="bottom") +
+  geom_sf()
+MapSc1BLM1
+
+##########################################################################################################
+
+#Require Scenarios 2 Fishery-Catch, with Boundary penalty = 0.001; 0.0001; 0 ###################################
+
+
+#Sc2 with Bp = 0.001:
+s2BLM0_001
+#Presentation:
+MapSc2BLM0_001 <- ggplot(s2BLM0_001, aes(fill = as.factor(solution), col=as.factor(solution))) +
+  theme_void() +
+  rremove("xy.text") +
+  ggtitle("Sc  BLM 0_001") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(name="Zones",
+                    breaks=c("0", "1", "2", "3", "4"),
+                    labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                    values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF")) +
+  scale_color_manual(name="Zones",
+                     breaks=c("0", "1", "2", "3", "4"),
+                     labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                     values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF"))+
+  theme(legend.position="bottom") +
+  geom_sf()
+MapSc2BLM0_001
+
+
+#Sc2 with Bp = 0.0001:
+s2
+#belle présentation:
+MapSc2BLM0_0001 <- ggplot(s2, aes(fill = as.factor(solution), col=as.factor(solution))) +
+  theme_void() +
+  rremove("xy.text") +
+  ggtitle("Sc 2 BLM 0_0001") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(name="Zones",
+                    breaks=c("0", "1", "2", "3", "4"),
+                    labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                    values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF")) +
+  scale_color_manual(name="Zones",
+                     breaks=c("0", "1", "2", "3", "4"),
+                     labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                     values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF"))+
+  theme(legend.position="bottom") +
+  geom_sf()
+MapSc2BLM0_0001
+
+
+#Sc2 with Bp = 0:
+s2noBLM
+#belle présentation:
+MapSc2BLM0 <- ggplot(s2noBLM, aes(fill = as.factor(solution), col=as.factor(solution))) +
+  theme_void() +
+  rremove("xy.text") +
+  ggtitle("Sc 2 BLM 0") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(name="Zones",
+                    breaks=c("0", "1", "2", "3", "4"),
+                    labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                    values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF")) +
+  scale_color_manual(name="Zones",
+                     breaks=c("0", "1", "2", "3", "4"),
+                     labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                     values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF"))+
+  theme(legend.position="bottom") +
+  geom_sf()
+MapSc2BLM0
+
+
+
+#Require Sc 2bis, considering Fishery and Ciguatera, with Boundary penalty = 0.01; 0.001; 0.0001 ###################################
+
+
+#Sc2 with Bp = 0.0001:
+s2bis
+#Presentation:
+MapSc2FciguaBLM0_0001 <- ggplot(s2bis, aes(fill = as.factor(solution), col=as.factor(solution))) +
+  theme_void() +
+  rremove("xy.text") +
+  ggtitle("Sc2BLM0_0001") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(name="Zones",
+                    breaks=c("0", "1", "2", "3", "4"),
+                    labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                    values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF")) +
+  scale_color_manual(name="Zones",
+                     breaks=c("0", "1", "2", "3", "4"),
+                     labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                     values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF"))+
+  theme(legend.position="bottom") +
+  geom_sf()
+MapSc2FciguaBLM0_0001
+
+
+#Sc2 with Bp = 0.001:
+s2bisBlm0_001
+#Presentation:
+MapSc2FciguaBLM0_001 <- ggplot(s2bisBlm0_001, aes(fill = as.factor(solution), col=as.factor(solution))) +
+  theme_void() +
+  rremove("xy.text") +
+  ggtitle("Sc2BLM0_001") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(name="Zones",
+                    breaks=c("0", "1", "2", "3", "4"),
+                    labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                    values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF")) +
+  scale_color_manual(name="Zones",
+                     breaks=c("0", "1", "2", "3", "4"),
+                     labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                     values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF"))+
+  theme(legend.position="bottom") +
+  geom_sf()
+MapSc2FciguaBLM0_001
+
+
+#Sc2 with Bp = 0.01:
+s2bisBlm0_01
+#Presentation:
+MapSc2FciguaBLM0_01 <- ggplot(s2bisBlm0_01, aes(fill = as.factor(solution), col=as.factor(solution))) +
+  theme_void() +
+  rremove("xy.text") +
+  ggtitle("Sc2BLM0_01") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(name="Zones",
+                    breaks=c("0", "1", "2", "3", "4"),
+                    labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                    values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF")) +
+  scale_color_manual(name="Zones",
+                     breaks=c("0", "1", "2", "3", "4"),
+                     labels=c("Open to Fisheries", "Conservation and Reseeding", "Conservation", "Farms", "Spat Collection"),
+                     values=c("#d9d9d9", "#31688EFF", "#440154FF", "#35B779FF", "#FDE725FF"))+
+  theme(legend.position="bottom") +
+  geom_sf()
+MapSc2FciguaBLM0_01
+
+
+##########################################################################################################
+
+#Require Sc 3 Fishery-Cigua, with Boundary penalty = 0.1; 0.01; 0.001;  ###################################
+
+
+
+#Sc3 with Bp = 0.01:
+s2
+#Presentation:
+MapSc3CiguaBLM0_01 <- ggplot(s3, aes(fill = as.factor(solution_1), col=as.factor(solution_1))) +
+  theme_void() +
+  rremove("xy.text") +
+  ggtitle("Sc3FCiguaBLM0_01") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(name="Zones",
+                    breaks=c("0", "1"),
+                    labels=c("Open to Fisheries", "Conservation"),
+                    values=c("#d9d9d9", "#440154FF")) +
+  scale_color_manual(name="Zones",
+                     breaks=c("0", "1"),
+                     labels=c("Open to Fisheries", "Conservation"),
+                     values=c("#d9d9d9", "#440154FF"))+
+  theme(legend.position="bottom") +
+  geom_sf()
+MapSc3CiguaBLM0_01
+
+
+#Sc3 with Bp = 0.001:
+s2blm0_001
+#Presentation:
+MapSc3CiguaBLM0_001 <- ggplot(s3blm0_001, aes(fill = as.factor(solution_1), col=as.factor(solution_1))) +
+  theme_void() +
+  rremove("xy.text") +
+  ggtitle("Sc3FCiguaBLM0_001") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(name="Zones",
+                    breaks=c("0", "1"),
+                    labels=c("Open to Fisheries", "Conservation"),
+                    values=c("#d9d9d9", "#440154FF")) +
+  scale_color_manual(name="Zones",
+                     breaks=c("0", "1"),
+                     labels=c("Open to Fisheries", "Conservation"),
+                     values=c("#d9d9d9", "#440154FF"))+
+  theme(legend.position="bottom") +
+  geom_sf()
+MapSc3CiguaBLM0_001
+
+
+#Sc3 with Bp = 0.001:
+s2blm0_1
+#Presentation:
+MapSc3CiguaBLM0_1 <- ggplot(s3blm0_1, aes(fill = as.factor(solution_1), col=as.factor(solution_1))) +
+  theme_void() +
+  rremove("xy.text") +
+  ggtitle("Sc3FCiguaBLM0_1") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(name="Zones",
+                    breaks=c("0", "1"),
+                    labels=c("Open to Fisheries", "Conservation"),
+                    values=c("#d9d9d9", "#440154FF")) +
+  scale_color_manual(name="Zones",
+                     breaks=c("0", "1"),
+                     labels=c("Open to Fisheries", "Conservation"),
+                     values=c("#d9d9d9", "#440154FF"))+
+  theme(legend.position="bottom") +
+  geom_sf()
+MapSc3CiguaBLM0_1
+
+
+#Require Sc 3 Fishery-Catch, with Boundary penalty à 0.01; 0.001;  ###################################
+
+
+#Sc3 with Bp = 0.01:
+s3bis
+#Presentation:
+MapSc3BLM0_01 <- ggplot(s3bis, aes(fill = as.factor(solution_1), col=as.factor(solution_1))) +
+  theme_void() +
+  rremove("xy.text") +
+  ggtitle("Sc3BLM0_01") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(name="Zones",
+                    breaks=c("0", "1"),
+                    labels=c("Open to Fisheries", "Conservation"),
+                    values=c("#d9d9d9", "#440154FF")) +
+  scale_color_manual(name="Zones",
+                     breaks=c("0", "1"),
+                     labels=c("Open to Fisheries", "Conservation"),
+                     values=c("#d9d9d9", "#440154FF"))+
+  theme(legend.position="bottom") +
+  geom_sf()
+MapSc3BLM0_01
+
+
+
+#Sc3 with Bp = 0.001:
+s3bisblm0_001
+#Presentation:
+MapSc3BLM0_001 <- ggplot(s3bisblm0_001, aes(fill = as.factor(solution_1), col=as.factor(solution_1))) +
+  theme_void() +
+  rremove("xy.text") +
+  ggtitle("Sc3BLM0_001") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(name="Zones",
+                    breaks=c("0", "1"),
+                    labels=c("Open to Fisheries", "Conservation"),
+                    values=c("#d9d9d9", "#440154FF")) +
+  scale_color_manual(name="Zones",
+                     breaks=c("0", "1"),
+                     labels=c("Open to Fisheries", "Conservation"),
+                     values=c("#d9d9d9", "#440154FF"))+
+  theme(legend.position="bottom") +
+  geom_sf()
+MapSc3BLM0_001
+
